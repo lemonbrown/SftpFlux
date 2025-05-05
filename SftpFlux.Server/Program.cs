@@ -1,15 +1,9 @@
-﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+﻿using Microsoft.AspNetCore.Authentication;
 using Renci.SshNet;
 using SftpFlux.Server;
-using System.IO;
-using System.Net.Http;
-using System.Net.Http.Json;
+using System.Reflection.Metadata.Ecma335;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+
 using ConnectionInfo = Renci.SshNet.ConnectionInfo;
 
 var config = new ConfigurationBuilder()
@@ -54,6 +48,9 @@ builder.Services.AddSingleton<SftpClient>(sp =>
     return new SftpClient(host, port, username, password);
 });
 
+builder.Services.AddSingleton<ISftpMetadataCacheService>(new InMemorySftpMetadataCacheService(TimeSpan.FromMinutes(10)));
+builder.Services.AddSingleton<IApiKeyService, InMemoryApiKeyService>();
+
 var app = builder.Build();
 
 // Connect and disconnect on demand (stateless)
@@ -65,27 +62,35 @@ SftpClient ConnectSftp(SftpClient client)
 }
 
 // List files in a directory
-app.MapGet("/files/{*path}", (string? path, SftpClient sftpClient) =>
+app.MapGet("/files/{*path}", async (string? path, SftpClient sftpClient, ISftpMetadataCacheService cacheService) =>
 {
     path ??= ".";
-    var client = ConnectSftp(sftpClient);
 
+    var cached = cacheService.GetDirectoryEntries(path);
+    if (cached != null)
+        return Results.Ok(cached);
+
+    var client = ConnectSftp(sftpClient);
     if (!client.Exists(path))
         return Results.NotFound($"Path not found: {path}");
 
     var entries = client.ListDirectory(path)
         .Where(f => f.Name != "." && f.Name != "..")
-        .Select(f => new
-        {
-            name = f.Name,
-            fullPath = f.FullName,
-            type = f.IsDirectory ? "directory" : "file",
-            size = f.Attributes.Size,
-            lastModified = f.Attributes.LastWriteTimeUtc
-        });
+        .Select(f => new SftpMetadataEntry {
+            Path = path,
+            Name = f.Name,
+            IsDirectory = f.IsDirectory,
+            Size = f.Attributes.Size,
+            LastModifiedUtc = f.Attributes.LastWriteTimeUtc
+        })
+        .ToList();
 
-    return Results.Ok(entries.Select(n => n.name));
-});
+    cacheService.SetDirectoryEntries(path, entries);
+
+    return Results.Ok(entries);
+})
+.RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
+
 
 app.MapGet("/file/{*path}", async (string path, SftpClient sftpClient) =>
 {
@@ -118,25 +123,63 @@ app.MapPost("/webhooks", (WebhookSubscription sub) =>
     return Results.Created($"/webhooks/{sub.Id}", sub);
 });
 
-app.MapPost("/test", (WebhookSubscription sub) =>
-{
-    WebhookStore.Subscriptions.Add(sub);
-    return Results.Created($"/webhooks/{sub.Id}", sub);
+app.MapPost("/apikeys", async (ApiKeyRequest request, IApiKeyService apiKeyService) => {
+
+    var apiKey = await apiKeyService.CreateKeyAsync(request.Scopes);
+    
+    return Results.Ok(apiKey);
 });
+
+app.MapGet("/apikeys", async (IApiKeyService apiKeyService) => Results.Ok(await apiKeyService.GetAllKeysAsync()));
+
+//app.MapGet("/apikeys/{id}", (string id) => {
+//    return apiKeyStore.TryGetValue(id, out var key)
+//        ? Results.Ok(key)
+//        : Results.NotFound();
+//});
+
+app.MapPut("/apikeys/{id}/scopes", async (string id, ScopeUpdateRequest update, IApiKeyService apiKeyService) => {
+
+    var key = await apiKeyService.GetKeyAsync(id);
+    
+    await apiKeyService.UpdateScopesAsync(id, update.Scopes.Distinct().ToList());
+
+    return Results.Ok(key);
+});
+
+//app.MapPost("/apikeys/{id}/revoke", (string id) => {
+//    if (!apiKeyStore.TryGetValue(id, out var key))
+//        return Results.NotFound();
+
+//    key.Revoked = true;
+//    return Results.Ok(key);
+//});
+
+//app.MapPost("/apikeys/{id}/reinstate", (string id) => {
+//    if (!apiKeyStore.TryGetValue(id, out var key))
+//        return Results.NotFound();
+
+//    key.Revoked = false;
+//    return Results.Ok(key);
+//});
+
+//app.MapDelete("/apikeys/{id}", (string id) => {
+//    return apiKeyStore.TryRemove(id, out _) ? Results.Ok() : Results.NotFound();
+//});
+
 
 var serverTask = app.RunAsync("http://localhost:5000");
 
 var pollingService = new SftpPollingService(app.Services);
 
-await pollingService.StartAsync(new CancellationToken());
+//await pollingService.StartAsync(new CancellationToken());
 
 // Start REPL
 var client = new HttpClient();
 Console.WriteLine("SFTP API running at http://localhost:5000");
 Console.WriteLine("Enter commands (e.g., 'get /files') or 'exit' to quit.");
 
-while (true)
-{
+while (true) {
     Console.Write("> ");
     var input = Console.ReadLine();
     if (string.IsNullOrWhiteSpace(input))
@@ -145,8 +188,7 @@ while (true)
     if (input.Trim().ToLower() == "exit")
         break;
 
-    if (input.StartsWith("post ", StringComparison.OrdinalIgnoreCase))
-    {
+    if (input.StartsWith("post ", StringComparison.OrdinalIgnoreCase)) {
         var parts = input.Split(' ', 3);
         var url = parts.Length > 1 ? parts[1] : "";
         var jsonBody = parts.Length > 2 ? parts[2] : "{}";
@@ -155,14 +197,17 @@ while (true)
 
         var response = await client.PostAsync("http://localhost:5000" + url, content);
         var result = await response.Content.ReadAsStringAsync();
+
+        if (url.Contains("apikeys")) {
+            ReplApiKey.ApiKey = result.Trim('"');
+        }
+
         Console.WriteLine($"[{(int)response.StatusCode}] {result}");
     }
 
-    if (input.StartsWith("get ", StringComparison.OrdinalIgnoreCase))
-    {
+    if (input.StartsWith("get ", StringComparison.OrdinalIgnoreCase)) {
         var parts = input.Split(' ', 2);
-        if (parts.Length != 2)
-        {
+        if (parts.Length != 2) {
             Console.WriteLine("Invalid command format. Use: get /files");
             continue;
         }
@@ -170,10 +215,8 @@ while (true)
         var method = parts[0].ToLower();
         var endpoint = parts[1];
 
-        try
-        {
-            switch (method)
-            {
+        try {
+            switch (method) {
                 case "get":
                     var response = await client.GetAsync("http://localhost:5000" + endpoint);
                     response.EnsureSuccessStatusCode();
@@ -185,12 +228,18 @@ while (true)
                     Console.WriteLine("Unsupported method.");
                     break;
             }
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             Console.WriteLine($"Error: {ex.Message}");
         }
-    }
+    }   
 }
-
 Console.WriteLine("Shutting down...");
+
+
+record ApiKeyRequest(string Name, List<string> Scopes);
+record ScopeUpdateRequest(List<string> Scopes);
+
+static class ReplApiKey {
+    public static string ApiKey { get; set; } = "";
+
+}
