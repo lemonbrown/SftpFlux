@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "SftpFlux.Server": {
+      "commandName": "Project",
+      "commandLineArgs": "--host localhost:2222 --user user@password",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:53023;http://localhost:53024"
+    }
+  }
+}

@@ -1,0 +1,197 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\sftpcacheservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\sftpcacheservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\isftpcacheservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\isftpcacheservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\cachedfilemetadata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\cachedfilemetadata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\sftpflux.server.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\sftpflux.server.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\sftppollingservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\sftppollingservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\sftppoller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\sftppoller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\webhooknotifier.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\webhooknotifier.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|c:\\users\\cambr\\source\\repos\\sftpflux\\sftpflux.server\\sftpflux.server.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
+      "RelativeMoniker": "D:0:0:{5D253259-4AC8-479C-A55A-F2BB743B388F}|SftpFlux.Server\\SftpFlux.Server.csproj|solutionrelative:sftpflux.server\\sftpflux.server.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 266,
+          "SelectedChildIndex": 2,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "SftpCacheService.cs",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpCacheService.cs",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\SftpCacheService.cs",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpCacheService.cs",
+              "RelativeToolTip": "SftpFlux.Server\\SftpCacheService.cs",
+              "ViewState": "AQIAACYAAAAAAAAAAAAQwC8AAAAlAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-05T03:45:35.877Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ISftpCacheService.cs",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\ISftpCacheService.cs",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\ISftpCacheService.cs",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\ISftpCacheService.cs",
+              "RelativeToolTip": "SftpFlux.Server\\ISftpCacheService.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAoAAAAFAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-05T03:45:16.263Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "CachedFileMetadata.cs",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\CachedFileMetadata.cs",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\CachedFileMetadata.cs",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\CachedFileMetadata.cs",
+              "RelativeToolTip": "SftpFlux.Server\\CachedFileMetadata.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAkAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-05T03:44:55.502Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "SftpFlux.Server",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpFlux.Server.csproj",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\SftpFlux.Server.csproj",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpFlux.Server.csproj",
+              "RelativeToolTip": "SftpFlux.Server\\SftpFlux.Server.csproj",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAATAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-05-03T03:07:31.805Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\Program.cs",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\Program.cs",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\Program.cs",
+              "RelativeToolTip": "SftpFlux.Server\\Program.cs",
+              "ViewState": "AQIAAGoAAAAAAAAAAAASwGcAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-03T02:46:40.196Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "SftpPoller.cs",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpPoller.cs",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\SftpPoller.cs",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpPoller.cs",
+              "RelativeToolTip": "SftpFlux.Server\\SftpPoller.cs",
+              "ViewState": "AQIAABEAAAAAAAAAAAAmwAkAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-05T03:05:19.608Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "launchSettings.json",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\Properties\\launchSettings.json",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\Properties\\launchSettings.json",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\Properties\\launchSettings.json",
+              "RelativeToolTip": "SftpFlux.Server\\Properties\\launchSettings.json",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-05-03T03:28:51.102Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "SftpFlux.Server",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpFlux.Server.csproj",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\SftpFlux.Server.csproj",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpFlux.Server.csproj",
+              "RelativeToolTip": "SftpFlux.Server\\SftpFlux.Server.csproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-05-03T03:20:14.723Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "SftpPollingService.cs",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpPollingService.cs",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\SftpPollingService.cs",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\SftpPollingService.cs",
+              "RelativeToolTip": "SftpFlux.Server\\SftpPollingService.cs",
+              "ViewState": "AQIAAAIAAAAAAAAAAAAawBMAAABAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-05T03:08:59.016Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "WebhookNotifier.cs",
+              "DocumentMoniker": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\WebhookNotifier.cs",
+              "RelativeDocumentMoniker": "SftpFlux.Server\\WebhookNotifier.cs",
+              "ToolTip": "C:\\Users\\cambr\\source\\repos\\SftpFlux\\SftpFlux.Server\\WebhookNotifier.cs",
+              "RelativeToolTip": "SftpFlux.Server\\WebhookNotifier.cs",
+              "ViewState": "AQIAAAEAAAAAAAAAAADwvwUAAAAgAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-05T03:10:23.362Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

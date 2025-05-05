@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\SftpFlux.Server.props" />
+</Project>
