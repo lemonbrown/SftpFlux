@@ -1,4 +1,4 @@
-﻿namespace SftpFlux.Server {
+﻿namespace SftpFlux.Server.Authorization {
     public class ApiKeyMiddleware {
         private readonly RequestDelegate _next;
         private const string ApiKeyHeader = "X-API-Key";

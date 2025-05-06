@@ -1,7 +1,7 @@
-﻿namespace SftpFlux.Server {
+﻿namespace SftpFlux.Server.Authorization {
     public interface IApiKeyService {
 
-        public Task<string> CreateKeyAsync(List<string> scopes);
+        public Task<string> CreateKeyAsync(List<string>? scopes, List<string>? sftpIds);
 
         public Task<bool> RevokeKeyAsync(string key);
 

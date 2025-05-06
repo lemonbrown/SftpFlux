@@ -1,8 +1,12 @@
-﻿namespace SftpFlux.Server
-{
-    public class InMemorySftpConnectionRegistry : ISftpConnectionRegistry
-    {
+﻿namespace SftpFlux.Server.Connection {
+    public class InMemorySftpConnectionRegistry : ISftpConnectionRegistry {
+
         private readonly Dictionary<string, SftpConnectionInfo> _connections = new();
+
+        public InMemorySftpConnectionRegistry(SftpConnectionInfo defaultSftpConnectionInfo) {
+
+            _connections.Add(defaultSftpConnectionInfo.Id, defaultSftpConnectionInfo);
+        }
 
         public SftpConnectionInfo? Get(string id) => _connections.TryGetValue(id, out var conn) ? conn : null;
 

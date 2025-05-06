@@ -5,6 +5,7 @@
         public string FullPath => System.IO.Path.Combine(Path, Name);
         public bool IsDirectory { get; set; }
         public long Size { get; set; }
+        public string SftpId { get; set; } = default!;
         public DateTime LastModifiedUtc { get; set; }
     }
 

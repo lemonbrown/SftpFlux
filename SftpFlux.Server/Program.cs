@@ -1,5 +1,9 @@
 ﻿using Renci.SshNet;
 using SftpFlux.Server;
+using SftpFlux.Server.Authorization;
+using SftpFlux.Server.Caching;
+using SftpFlux.Server.Connection;
+using SftpFlux.Server.Polling;
 using System.Text;
 
 using ConnectionInfo = Renci.SshNet.ConnectionInfo;
@@ -26,54 +30,69 @@ var userParts = userString.Split('@', 2);
 var username = userParts[0];
 var password = userParts[1];
 
-var connectionInfo = new ConnectionInfo(
-    hostname,
-    port,
-    username,
-    new PasswordAuthenticationMethod(username, password)
-);
+var defaultConnectionInfo = new SftpConnectionInfo {
+    Host = hostname,
+    Port = port,
+    Username = username,
+    Password = password,
+    Id = Guid.NewGuid().ToString("N")
+};
+
+GlobalConfig.IsTestBypassAuth = true;
 
 // Start Web API in the background
 var builder = WebApplication.CreateBuilder();
 builder.Logging.ClearProviders();
-builder.Services.AddSingleton(connectionInfo);
 
-// Register SftpClient in the DI container (use your connection details here)
-builder.Services.AddSingleton<SftpClient>(sp =>
-{
-    var host = hostname;
+builder.Services.AddSingleton(defaultConnectionInfo);
 
-    return new SftpClient(host, port, username, password);
-});
+var runInMemory = true;
 
-var apiKeyService = new InMemoryApiKeyService();
-
-ReplApiKey.ApiKey = await apiKeyService.CreateKeyAsync(null);
+var inTestMode = true;
 
 builder.Services.AddSingleton<ISftpMetadataCacheService>(new InMemorySftpMetadataCacheService(TimeSpan.FromMinutes(10)));
-builder.Services.AddSingleton<IApiKeyService>(apiKeyService);
 builder.Services.AddSingleton<ISftpConnectionRegistry, InMemorySftpConnectionRegistry>();
+
+if (runInMemory) {
+
+    builder.Services.AddSingleton<IApiKeyService, InMemoryApiKeyService>();
+    builder.Services.AddSingleton<IWebhookService, InMemoryWebhookService>();
+
+} else {
+
+    builder.Services.AddSingleton<IApiKeyService, PersistentApiKeyService>();
+}
 
 var app = builder.Build();
 
 // Connect and disconnect on demand (stateless)
-SftpClient ConnectSftp(SftpClient client)
+SftpClient ConnectSftp(SftpConnectionInfo connection)
 {
-    if (!client.IsConnected)
-        client.Connect();
-    return client;
+    var sftpClient = new SftpClient(connection.Host, connection.Port, connection.Username, connection.Password);
+
+    if (!sftpClient.IsConnected)
+        sftpClient.Connect();
+
+    return sftpClient;
 }
 
 // List files in a directory
-app.MapGet("/files/{*path}", async (string? path, SftpClient sftpClient, ISftpMetadataCacheService cacheService) =>
+app.MapGet("/files/{*path}", async (
+    string? path, 
+    ISftpConnectionRegistry sftpConnectionRegistry, 
+    ISftpMetadataCacheService cacheService) =>
 {
     path ??= ".";
 
-    var cached = cacheService.GetDirectoryEntries(path);
+    var connections = sftpConnectionRegistry.GetAll();
+
+    var cached = cacheService.GetDirectoryEntries(path, connections.First().Id);
+
     if (cached != null)
         return Results.Ok(cached);
 
-    var client = ConnectSftp(sftpClient);
+    var client = ConnectSftp(connections.First());
+
     if (!client.Exists(path))
         return Results.NotFound($"Path not found: {path}");
 
@@ -88,7 +107,7 @@ app.MapGet("/files/{*path}", async (string? path, SftpClient sftpClient, ISftpMe
         })
         .ToList();
 
-    cacheService.SetDirectoryEntries(path, entries);
+    cacheService.SetDirectoryEntries(path, entries, connections.First().Id);
 
     return Results.Ok(entries);
 })
@@ -109,12 +128,12 @@ app.MapGet("/sftp/{sftpId}/files/{*path}",
 
     path ??= ".";
 
-    var cached = cacheService.GetDirectoryEntries(path);
+    var cached = cacheService.GetDirectoryEntries(path, sftpId);
     if (cached != null)
         return Results.Ok(cached);
 
-    using var sftpClient = new SftpClient(connection.Host, connection.Port, connection.Username, connection.Password);
-    var client = ConnectSftp(sftpClient);
+    var client = ConnectSftp(connection);
+
     if (!client.Exists(path))
         return Results.NotFound($"Path not found: {path}");
 
@@ -130,20 +149,20 @@ app.MapGet("/sftp/{sftpId}/files/{*path}",
         })
         .ToList();
 
-    cacheService.SetDirectoryEntries(path, entries);
+    cacheService.SetDirectoryEntries(path, entries, sftpId);
 
     return Results.Ok(entries);
 })
 .RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
 
-app.MapGet("/file/{*path}", async (string path, SftpClient sftpClient) =>
+app.MapGet("/file/{*path}", async (string path, ISftpConnectionRegistry sftpConnectionRegistry) =>
 {
     // If the path is not provided, default to the root directory
     path ??= ".";
 
-    // Ensure the SFTP client is connected
-    if (!sftpClient.IsConnected)
-        sftpClient.Connect();
+    var connections = sftpConnectionRegistry.GetAll();
+
+    var sftpClient = ConnectSftp(connections.First());
 
     // Check if the file exists in the specified path
     if (!sftpClient.Exists(path))
@@ -163,26 +182,38 @@ app.MapGet("/file/{*path}", async (string path, SftpClient sftpClient) =>
 .RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
 
 
-app.MapPost("/webhooks", (WebhookSubscription sub) =>
+app.MapPost("/webhooks", async (HttpContext context, WebhookSubscription sub, IWebhookService webhookService, IApiKeyService apiKeyService) =>
 {
+    var apikey = await apiKeyService.GetKeyAsync(context.Request.Headers.Authorization.ToString());
+
+    if (inTestMode)
+        apikey ??= new();
+    else
+        return Results.Unauthorized();
+
+    await webhookService.AddAsync(sub, apikey);
+
     WebhookStore.Subscriptions.Add(sub);
     return Results.Created($"/webhooks/{sub.Id}", sub);
 });
 
 app.MapPost("/apikeys", async (ApiKeyRequest request, IApiKeyService apiKeyService) => {
 
-    var apiKey = await apiKeyService.CreateKeyAsync(request.Scopes);
+    var apiKey = await apiKeyService.CreateKeyAsync(request.Scopes, request.SftpIds);
     
     return Results.Ok(apiKey);
 });
 
-app.MapGet("/apikeys", async (IApiKeyService apiKeyService) => Results.Ok(await apiKeyService.GetAllKeysAsync()));
+app.MapGet("/apikeys", async (IApiKeyService apiKeyService) => {
+    return Results.Ok(await apiKeyService.GetAllKeysAsync());
+});
 
-//app.MapGet("/apikeys/{id}", (string id) => {
-//    return apiKeyStore.TryGetValue(id, out var key)
-//        ? Results.Ok(key)
-//        : Results.NotFound();
-//});
+app.MapGet("/apikeys/{id}", async (string id, IApiKeyService apiKeyService) => {
+    var key = await apiKeyService.GetKeyAsync(id);
+    return key != null
+        ? Results.Ok(key)
+        : Results.NotFound();
+});
 
 app.MapPut("/apikeys/{id}/scopes", async (string id, ScopeUpdateRequest update, IApiKeyService apiKeyService) => {
 
@@ -193,13 +224,13 @@ app.MapPut("/apikeys/{id}/scopes", async (string id, ScopeUpdateRequest update, 
     return Results.Ok(key);
 });
 
-//app.MapPost("/apikeys/{id}/revoke", (string id) => {
-//    if (!apiKeyStore.TryGetValue(id, out var key))
-//        return Results.NotFound();
+app.MapPost("/apikeys/{id}/revoke", async (string id, IApiKeyService apiKeyService) => {
 
-//    key.Revoked = true;
-//    return Results.Ok(key);
-//});
+    if (!await apiKeyService.ReinstateKeyAsync(id))
+        return Results.NotFound();    
+
+    return Results.Ok();
+});
 
 //app.MapPost("/apikeys/{id}/reinstate", (string id) => {
 //    if (!apiKeyStore.TryGetValue(id, out var key))
@@ -209,12 +240,20 @@ app.MapPut("/apikeys/{id}/scopes", async (string id, ScopeUpdateRequest update, 
 //    return Results.Ok(key);
 //});
 
-//app.MapDelete("/apikeys/{id}", (string id) => {
-//    return apiKeyStore.TryRemove(id, out _) ? Results.Ok() : Results.NotFound();
-//});
+app.MapDelete("/apikeys/{id}", async (string id, IApiKeyService apiKeyService) => {
+    return await apiKeyService.DeleteKeyAsync(id) ? Results.Ok() : Results.NotFound();
+});
 
-app.MapPost("/sftp", (SftpConnectionInfo info, ISftpConnectionRegistry registry) =>
+app.MapPost("/sftp", (SftpConnectionInfoRequest request, ISftpConnectionRegistry registry) =>
 {
+    var info = new SftpConnectionInfo {
+        Id = request.Id,
+        Host = request.Host,
+        Password = request.Password,
+        Username = request.Username,
+        Port = request.Port
+    };
+
     registry.Add(info);
     return Results.Ok();
 });
@@ -255,10 +294,6 @@ while (true) {
         var response = await client.PostAsync("http://localhost:5000" + url, content);
         var result = await response.Content.ReadAsStringAsync();
 
-        if (url.Contains("apikeys")) {
-            ReplApiKey.ApiKey = result.Trim('"');
-        }
-
         Console.WriteLine($"[{(int)response.StatusCode}] {result}");
     }
 
@@ -290,13 +325,15 @@ while (true) {
         }
     }   
 }
+
 Console.WriteLine("Shutting down...");
 
+record ApiKeyRequest(string Name, List<string>? Scopes, List<string>? SftpIds);
 
-record ApiKeyRequest(string Name, List<string> Scopes);
 record ScopeUpdateRequest(List<string> Scopes);
 
-static class ReplApiKey {
-    public static string ApiKey { get; set; } = "";
+static class GlobalConfig {
+
+    public static bool IsTestBypassAuth { get; set; }
 
 }

@@ -1,7 +1,5 @@
-﻿namespace SftpFlux.Server
-{
-    public static class WebhookStore
-    {
+﻿namespace SftpFlux.Server.Polling {
+    public static class WebhookStore {
         public static List<WebhookSubscription> Subscriptions { get; } = new();
     }
 }

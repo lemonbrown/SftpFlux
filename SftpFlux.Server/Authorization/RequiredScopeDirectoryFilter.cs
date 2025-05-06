@@ -1,7 +1,8 @@
 ﻿using System.Net.Http.Headers;
 
-namespace SftpFlux.Server {
+namespace SftpFlux.Server.Authorization {
     public class RequireScopedDirectoryFilter : IEndpointFilter {
+
         private readonly string _requiredAction;
         private readonly Func<EndpointFilterInvocationContext, string> _pathAccessor;
 
@@ -13,13 +14,16 @@ namespace SftpFlux.Server {
         public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next) {
             var httpContext = context.HttpContext;
             var apiKeyService = httpContext.RequestServices.GetRequiredService<IApiKeyService>();
-            
-            if (!httpContext.Request.Headers.TryGetValue("X-API-Key", out var apiKeyHeader))
-                if (String.IsNullOrWhiteSpace(ReplApiKey.ApiKey))
-                    return Results.Unauthorized();
-            
 
-            var apiKey = !String.IsNullOrWhiteSpace(apiKeyHeader.ToString()) ? apiKeyHeader.ToString() : ReplApiKey.ApiKey;
+            if (GlobalConfig.IsTestBypassAuth)
+                return await next(context);
+
+            if (!httpContext.Request.Headers.TryGetValue("X-API-Key", out var apiKeyHeader))
+                return Results.Unauthorized();
+
+
+            var apiKey = apiKeyHeader.ToString();
+
             if (!await apiKeyService.ValidateKeyAsync(apiKey))
                 return Results.Unauthorized();
 

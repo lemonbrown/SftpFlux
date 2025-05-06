@@ -1,7 +1,6 @@
-﻿namespace SftpFlux.Server
-{
-    public class SftpConnectionInfo
-    {
+﻿namespace SftpFlux.Server.Connection {
+    public class SftpConnectionInfoRequest {
+
         public string Id { get; set; } // e.g. "vendorA", "client1"
         public string Host { get; set; }
         public int Port { get; set; } = 22;

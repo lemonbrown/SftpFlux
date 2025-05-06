@@ -1,12 +1,16 @@
 ﻿using System.Collections.Concurrent;
 
-namespace SftpFlux.Server {
-    public class InMemoryApiKeyService : IApiKeyService{
+namespace SftpFlux.Server.Authorization {
+
+    public class InMemoryApiKeyService : IApiKeyService {
+
         private readonly ConcurrentDictionary<string, ApiKey> _apiKeyStore = new();
 
-        public Task<string> CreateKeyAsync(List<string> scopes) {
+        public Task<string> CreateKeyAsync(List<string>? scopes, List<string>? sftpIds) {
+
             var entry = new ApiKey {
-                Scopes = scopes
+                Scopes = scopes ?? [],
+                SftpIds = sftpIds ?? [],
             };
 
             _apiKeyStore[entry.Key] = entry;

@@ -1,4 +1,4 @@
-﻿namespace SftpFlux.Server {
+﻿namespace SftpFlux.Server.Authorization {
     public static class ScopeValidator {
         public static bool IsScopeAllowed(IEnumerable<string> scopes, string requiredAction, string requiredPath) {
             foreach (var scope in scopes) {

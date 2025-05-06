@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace SftpFlux.Server {
+namespace SftpFlux.Server.Caching {
     public class FileBackedSftpMetadataCacheService : ISftpMetadataCacheService {
         private readonly string _cacheFilePath;
         private readonly TimeSpan _ttl;
@@ -26,7 +26,7 @@ namespace SftpFlux.Server {
             }
         }
 
-        public IEnumerable<SftpMetadataEntry>? GetDirectoryEntries(string path) {
+        public IEnumerable<SftpMetadataEntry>? GetDirectoryEntries(string path, string? sftpId) {
             lock (_lock) {
                 if (_cache.TryGetValue(path, out var data) &&
                     DateTime.UtcNow - data.CachedAtUtc < _ttl) {
@@ -38,7 +38,7 @@ namespace SftpFlux.Server {
             }
         }
 
-        public void SetDirectoryEntries(string path, IEnumerable<SftpMetadataEntry> entries) {
+        public void SetDirectoryEntries(string path, IEnumerable<SftpMetadataEntry> entries, string? sftpId) {
             lock (_lock) {
                 _cache[path] = (entries.ToList(), DateTime.UtcNow);
                 SaveToFile();
