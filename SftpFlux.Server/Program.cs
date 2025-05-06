@@ -1,7 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Renci.SshNet;
+﻿using Renci.SshNet;
 using SftpFlux.Server;
-using System.Reflection.Metadata.Ecma335;
 using System.Text;
 
 using ConnectionInfo = Renci.SshNet.ConnectionInfo;
@@ -48,8 +46,13 @@ builder.Services.AddSingleton<SftpClient>(sp =>
     return new SftpClient(host, port, username, password);
 });
 
+var apiKeyService = new InMemoryApiKeyService();
+
+ReplApiKey.ApiKey = await apiKeyService.CreateKeyAsync(null);
+
 builder.Services.AddSingleton<ISftpMetadataCacheService>(new InMemorySftpMetadataCacheService(TimeSpan.FromMinutes(10)));
-builder.Services.AddSingleton<IApiKeyService, InMemoryApiKeyService>();
+builder.Services.AddSingleton<IApiKeyService>(apiKeyService);
+builder.Services.AddSingleton<ISftpConnectionRegistry, InMemorySftpConnectionRegistry>();
 
 var app = builder.Build();
 
@@ -91,6 +94,47 @@ app.MapGet("/files/{*path}", async (string? path, SftpClient sftpClient, ISftpMe
 })
 .RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
 
+// List files in a directory
+app.MapGet("/sftp/{sftpId}/files/{*path}", 
+    async (
+        string sftpId, 
+        string? path, 
+        ISftpMetadataCacheService cacheService,
+        ISftpConnectionRegistry sftpConnectionRegistry) =>
+{
+    var connection = sftpConnectionRegistry.Get(sftpId);
+
+    if (connection == null)
+        return Results.NotFound($"SFTP config '{sftpId}' not found.");
+
+    path ??= ".";
+
+    var cached = cacheService.GetDirectoryEntries(path);
+    if (cached != null)
+        return Results.Ok(cached);
+
+    using var sftpClient = new SftpClient(connection.Host, connection.Port, connection.Username, connection.Password);
+    var client = ConnectSftp(sftpClient);
+    if (!client.Exists(path))
+        return Results.NotFound($"Path not found: {path}");
+
+    var entries = client.ListDirectory(path)
+        .Where(f => f.Name != "." && f.Name != "..")
+        .Select(f => new SftpMetadataEntry
+        {
+            Path = path,
+            Name = f.Name,
+            IsDirectory = f.IsDirectory,
+            Size = f.Attributes.Size,
+            LastModifiedUtc = f.Attributes.LastWriteTimeUtc
+        })
+        .ToList();
+
+    cacheService.SetDirectoryEntries(path, entries);
+
+    return Results.Ok(entries);
+})
+.RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
 
 app.MapGet("/file/{*path}", async (string path, SftpClient sftpClient) =>
 {
@@ -115,7 +159,9 @@ app.MapGet("/file/{*path}", async (string path, SftpClient sftpClient) =>
     // Return the file as a stream with the appropriate content-type and headers
     return Results.File(fileStream, fileType, fileName);
 
-});
+})
+.RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
+
 
 app.MapPost("/webhooks", (WebhookSubscription sub) =>
 {
@@ -166,6 +212,17 @@ app.MapPut("/apikeys/{id}/scopes", async (string id, ScopeUpdateRequest update, 
 //app.MapDelete("/apikeys/{id}", (string id) => {
 //    return apiKeyStore.TryRemove(id, out _) ? Results.Ok() : Results.NotFound();
 //});
+
+app.MapPost("/sftp", (SftpConnectionInfo info, ISftpConnectionRegistry registry) =>
+{
+    registry.Add(info);
+    return Results.Ok();
+});
+
+app.MapGet("/sftp", (ISftpConnectionRegistry registry) =>
+{
+    return Results.Ok(registry.GetAll());
+});
 
 
 var serverTask = app.RunAsync("http://localhost:5000");
