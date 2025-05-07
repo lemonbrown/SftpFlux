@@ -4,6 +4,7 @@ using SftpFlux.Server.Authorization;
 using SftpFlux.Server.Caching;
 using SftpFlux.Server.Connection;
 using SftpFlux.Server.Polling;
+using System.IO.Pipes;
 using System.Text;
 
 using ConnectionInfo = Renci.SshNet.ConnectionInfo;
@@ -12,13 +13,44 @@ var config = new ConfigurationBuilder()
     .AddCommandLine(args)
     .Build();
 
+async Task SendCommandToPipe(string command)
+{
+    try
+    {
+
+        using var pipeClient = new NamedPipeClientStream(".", "sftpflux-admin", PipeDirection.InOut);
+        await pipeClient.ConnectAsync(2000); // 2 second timeout
+
+        using var writer = new StreamWriter(pipeClient, Encoding.UTF8) { AutoFlush = true };
+        using var reader = new StreamReader(pipeClient, Encoding.UTF8);
+
+        await writer.WriteLineAsync("hello from client");
+
+        var response = await reader.ReadLineAsync();
+
+        Console.WriteLine($"[Response] {response}");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"[Error] Failed to send command: {ex.Message}");
+    }
+}
+
+
 var hostString = config["host"];
 var userString = config["user"];
+var adminString = config["admin"];
 
 if (hostString == null || userString == null)
 {
-    Console.WriteLine("Usage: --host sftp.example.com:22 --user username@password");
+    var command = string.Join(' ', args.Skip(1));
+
+    await SendCommandToPipe(command);
+
     return;
+
+    //Console.WriteLine("Usage: --host sftp.example.com:22 --user username@password");
+    //return;
 }
 
 // Parse inputs
@@ -29,6 +61,13 @@ var port = int.Parse(hostParts[1]);
 var userParts = userString.Split('@', 2);
 var username = userParts[0];
 var password = userParts[1];
+
+if (!string.IsNullOrEmpty(adminString))
+{
+    var adminParts = adminString.Split("@", 2);
+    var adminUsername = adminParts[0];
+    var adminPassword = adminParts[1];
+}
 
 var defaultConnectionInfo = new SftpConnectionInfo {
     Host = hostname,
@@ -42,7 +81,7 @@ GlobalConfig.IsTestBypassAuth = true;
 
 // Start Web API in the background
 var builder = WebApplication.CreateBuilder();
-builder.Logging.ClearProviders();
+//builder.Logging.ClearProviders();
 
 builder.Services.AddSingleton(defaultConnectionInfo);
 
@@ -273,60 +312,64 @@ var pollingService = new SftpPollingService(app.Services);
 // Start REPL
 var client = new HttpClient();
 Console.WriteLine("SFTP API running at http://localhost:5000");
-Console.WriteLine("Enter commands (e.g., 'get /files') or 'exit' to quit.");
+//Console.WriteLine("Enter commands (e.g., 'get /files') or 'exit' to quit.");
 
-while (true) {
-    Console.Write("> ");
-    var input = Console.ReadLine();
-    if (string.IsNullOrWhiteSpace(input))
-        continue;
+var pipeListener = new PipeCommandListener(CancellationToken.None);
+pipeListener.Start();
 
-    if (input.Trim().ToLower() == "exit")
-        break;
 
-    if (input.StartsWith("post ", StringComparison.OrdinalIgnoreCase)) {
-        var parts = input.Split(' ', 3);
-        var url = parts.Length > 1 ? parts[1] : "";
-        var jsonBody = parts.Length > 2 ? parts[2] : "{}";
+//while (true) {
+//    Console.Write("> ");
+//    var input = Console.ReadLine();
+//    if (string.IsNullOrWhiteSpace(input))
+//        continue;
 
-        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+//    if (input.Trim().ToLower() == "exit")
+//        break;
 
-        var response = await client.PostAsync("http://localhost:5000" + url, content);
-        var result = await response.Content.ReadAsStringAsync();
+//    if (input.StartsWith("post ", StringComparison.OrdinalIgnoreCase)) {
+//        var parts = input.Split(' ', 3);
+//        var url = parts.Length > 1 ? parts[1] : "";
+//        var jsonBody = parts.Length > 2 ? parts[2] : "{}";
 
-        Console.WriteLine($"[{(int)response.StatusCode}] {result}");
-    }
+//        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
-    if (input.StartsWith("get ", StringComparison.OrdinalIgnoreCase)) {
-        var parts = input.Split(' ', 2);
-        if (parts.Length != 2) {
-            Console.WriteLine("Invalid command format. Use: get /files");
-            continue;
-        }
+//        var response = await client.PostAsync("http://localhost:5000" + url, content);
+//        var result = await response.Content.ReadAsStringAsync();
 
-        var method = parts[0].ToLower();
-        var endpoint = parts[1];
+//        Console.WriteLine($"[{(int)response.StatusCode}] {result}");
+//    }
 
-        try {
-            switch (method) {
-                case "get":
-                    var response = await client.GetAsync("http://localhost:5000" + endpoint);
-                    response.EnsureSuccessStatusCode();
-                    //var result = await response.Content.ReadFromJsonAsync<List<string>>();
-                    var result = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine(string.Join('\n', result ?? ""));
-                    break;
-                default:
-                    Console.WriteLine("Unsupported method.");
-                    break;
-            }
-        } catch (Exception ex) {
-            Console.WriteLine($"Error: {ex.Message}");
-        }
-    }   
-}
+//    if (input.StartsWith("get ", StringComparison.OrdinalIgnoreCase)) {
+//        var parts = input.Split(' ', 2);
+//        if (parts.Length != 2) {
+//            Console.WriteLine("Invalid command format. Use: get /files");
+//            continue;
+//        }
 
-Console.WriteLine("Shutting down...");
+//        var method = parts[0].ToLower();
+//        var endpoint = parts[1];
+
+//        try {
+//            switch (method) {
+//                case "get":
+//                    var response = await client.GetAsync("http://localhost:5000" + endpoint);
+//                    response.EnsureSuccessStatusCode();
+//                    //var result = await response.Content.ReadFromJsonAsync<List<string>>();
+//                    var result = await response.Content.ReadAsStringAsync();
+//                    Console.WriteLine(string.Join('\n', result ?? ""));
+//                    break;
+//                default:
+//                    Console.WriteLine("Unsupported method.");
+//                    break;
+//            }
+//        } catch (Exception ex) {
+//            Console.WriteLine($"Error: {ex.Message}");
+//        }
+//    }   
+//}
+
+await Task.Delay(-1);
 
 record ApiKeyRequest(string Name, List<string>? Scopes, List<string>? SftpIds);
 
