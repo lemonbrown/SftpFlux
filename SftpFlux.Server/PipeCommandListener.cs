@@ -28,18 +28,18 @@ namespace SftpFlux.Server
 
                         Console.WriteLine("Server: Client connected!");
 
-                        using var reader = new StreamReader(pipeServer, Encoding.UTF8, leaveOpen: true);
-                        using var writer = new StreamWriter(pipeServer, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
-
-                        Console.WriteLine("Waiting for line...");
-
-                        var command = await reader.ReadLineAsync();
-                        if (command != null)
+                        using (var reader = new StreamReader(pipeServer, Encoding.UTF8, leaveOpen: true))
+                        using (var writer = new StreamWriter(pipeServer, Encoding.UTF8, leaveOpen: true) { AutoFlush = true })
                         {
-                            Console.WriteLine($"[Pipe] Received command: {command}");
+                            Console.WriteLine("[Server] Waiting for line...");
+                            string? command = await reader.ReadLineAsync();  // Wait for data from client
 
-                            // Optionally send a response
-                            await writer.WriteLineAsync($"ACK: {command}");
+                            if (command != null)
+                            {
+                                Console.WriteLine($"[Server] Received: {command}");
+                                // After reading, we can write back
+                                await writer.WriteLineAsync("ACK: " + command);  // Send acknowledgment
+                            }
                         }
                     }
                     catch (IOException ex)
