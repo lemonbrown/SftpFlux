@@ -1,0 +1,24 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>SftpFlux Dashboard</title>
+    <script src="https://unpkg.com/htmx.org@1.9.5"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@2/css/pico.min.css">
+</head>
+<body class="container">
+    <main>
+        <h1>SftpFlux Admin</h1>
+
+        <section>
+            <h2>Remote File Listing</h2>
+            <button hx-get="/files" hx-target="#file-list" hx-swap="innerHTML">
+                Load Files
+            </button>
+            <div id="file-list" style="margin-top: 1em;">
+                <!-- Files will be rendered here -->
+            </div>
+        </section>
+    </main>
+</body>
+</html>

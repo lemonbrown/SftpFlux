@@ -22,7 +22,7 @@ async Task SendCommandToPipe(string command)
     {
 
         using var pipeClient = new NamedPipeClientStream(
-    ".", "sftpflux-admin", PipeDirection.InOut, PipeOptions.Asynchronous);
+            ".", "sftpflux-admin", PipeDirection.InOut, PipeOptions.Asynchronous);
 
         Console.WriteLine("[Client] Connecting...");
         await pipeClient.ConnectAsync(5000);
@@ -114,6 +114,10 @@ if (runInMemory) {
 
 var app = builder.Build();
 
+
+app.UseDefaultFiles();    // Serves index.html from wwwroot
+app.UseStaticFiles();     // For Tailwind/HTMX
+
 //app.UseMiddleware<BasicAuthMiddleware>();
 
 // Connect and disconnect on demand (stateless)
@@ -127,42 +131,96 @@ SftpClient ConnectSftp(SftpConnectionInfo connection)
     return sftpClient;
 }
 
-// List files in a directory
+
 app.MapGet("/files/{*path}", async (
-    string? path, 
-    ISftpConnectionRegistry sftpConnectionRegistry, 
-    ISftpMetadataCacheService cacheService) =>
+    string? path,
+    string? name,
+    string? type,
+    DateTime? modifiedFrom,
+    DateTime? modifiedTo,
+    string? sortBy,
+    string? sortOrder,
+    ISftpConnectionRegistry sftpConnectionRegistry,
+    ISftpMetadataCacheService cacheService,
+    int page = 1,
+    int pageSize = 50) =>
 {
     path ??= ".";
 
     var connections = sftpConnectionRegistry.GetAll();
+    if (!connections.Any())
+        return Results.Problem("No SFTP connections available.");
 
-    var cached = cacheService.GetDirectoryEntries(path, connections.First().Id);
+    var connectionId = connections.First().Id;
+    var cached = cacheService.GetDirectoryEntries(path, connectionId);
 
+    List<SftpMetadataEntry> entries;
     if (cached != null)
-        return Results.Ok(cached);
+    {
+        entries = cached.ToList();
+    }
+    else
+    {
+        var client = ConnectSftp(connections.First());
 
-    var client = ConnectSftp(connections.First());
+        if (!client.Exists(path))
+            return Results.NotFound($"Path not found: {path}");
 
-    if (!client.Exists(path))
-        return Results.NotFound($"Path not found: {path}");
+        entries = client.ListDirectory(path)
+            .Where(f => f.Name != "." && f.Name != "..")
+            .Select(f => new SftpMetadataEntry
+            {
+                Path = path,
+                Name = f.Name,
+                IsDirectory = f.IsDirectory,
+                Size = f.Attributes.Size,
+                LastModifiedUtc = f.Attributes.LastWriteTimeUtc,
+                
+            })
+            .ToList();
 
-    var entries = client.ListDirectory(path)
-        .Where(f => f.Name != "." && f.Name != "..")
-        .Select(f => new SftpMetadataEntry {
-            Path = path,
-            Name = f.Name,
-            IsDirectory = f.IsDirectory,
-            Size = f.Attributes.Size,
-            LastModifiedUtc = f.Attributes.LastWriteTimeUtc
-        })
+        cacheService.SetDirectoryEntries(path, entries, connectionId);
+    }
+
+    // Apply filters
+    var filtered = entries
+        .Where(f => string.IsNullOrEmpty(name) || f.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
+        .Where(f => string.IsNullOrEmpty(type) || f.Name.EndsWith("." + type, StringComparison.OrdinalIgnoreCase))
+        .Where(f => !modifiedFrom.HasValue || f.LastModifiedUtc >= modifiedFrom.Value)
+        .Where(f => !modifiedTo.HasValue || f.LastModifiedUtc <= modifiedTo.Value);
+
+    // Paging
+
+
+    // Apply sorting
+    bool descending = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+
+    filtered = sortBy?.ToLower() switch
+    {
+        "name" => descending ? filtered.OrderByDescending(f => f.Name) : filtered.OrderBy(f => f.Name),
+        "size" => descending ? filtered.OrderByDescending(f => f.Size) : filtered.OrderBy(f => f.Size),
+        "lastmodified" => descending ? filtered.OrderByDescending(f => f.LastModifiedUtc) : filtered.OrderBy(f => f.LastModifiedUtc),
+        _ => filtered.OrderBy(f => f.Name) // Default sort
+    };
+
+    var totalCount = filtered.Count();
+    var results = filtered
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
         .ToList();
 
-    cacheService.SetDirectoryEntries(path, entries, connections.First().Id);
+    var response = new
+    {
+        Page = page,
+        PageSize = pageSize,
+        TotalCount = totalCount,
+        Results = results
+    };
 
-    return Results.Ok(entries);
+    return Results.Ok(response);
 })
 .RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
+
 
 // List files in a directory
 app.MapGet("/sftp/{sftpId}/files/{*path}", 
