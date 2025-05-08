@@ -2,7 +2,7 @@
   "profiles": {
     "SftpFlux.Server": {
       "commandName": "Project",
-      "commandLineArgs": "--host localhost:2222 --user user@password",
+      "commandLineArgs": "--host sftp.yourcase.works:22 --user caseworksasa003.caseworksrapidrecordsdev@ads15TJadwgPrN+wniKZprC4nPjzIi72",
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"

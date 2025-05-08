@@ -1,9 +1,12 @@
 ﻿using Renci.SshNet;
+using Renci.SshNet.Messages;
 using SftpFlux.Server;
 using SftpFlux.Server.Authorization;
 using SftpFlux.Server.Caching;
 using SftpFlux.Server.Connection;
+using SftpFlux.Server.Pipes;
 using SftpFlux.Server.Polling;
+using SftpFlux.Server.User;
 using System.IO.Pipes;
 using System.Text;
 
@@ -18,17 +21,22 @@ async Task SendCommandToPipe(string command)
     try
     {
 
-        using var pipeClient = new NamedPipeClientStream(".", "sftpflux-admin", PipeDirection.InOut);
-        await pipeClient.ConnectAsync(2000); // 2 second timeout
+        using var pipeClient = new NamedPipeClientStream(
+    ".", "sftpflux-admin", PipeDirection.InOut, PipeOptions.Asynchronous);
 
-        using var writer = new StreamWriter(pipeClient, Encoding.UTF8) { AutoFlush = true };
-        using var reader = new StreamReader(pipeClient, Encoding.UTF8);
+        Console.WriteLine("[Client] Connecting...");
+        await pipeClient.ConnectAsync(5000);
+        Console.WriteLine("[Client] Connected.");
 
-        await writer.WriteLineAsync("hello from client");
+        var messageBytes = Encoding.UTF8.GetBytes(command);
+        await pipeClient.WriteAsync(messageBytes, 0, messageBytes.Length);
+        await pipeClient.FlushAsync();
 
-        var response = await reader.ReadLineAsync();
+        byte[] responseBuffer = new byte[1024];
+        int bytesRead = await pipeClient.ReadAsync(responseBuffer, 0, responseBuffer.Length);
+        var response = Encoding.UTF8.GetString(responseBuffer, 0, bytesRead);
 
-        Console.WriteLine($"[Response] {response}");
+        Console.WriteLine($"[Client] Received: {response}");
     }
     catch (Exception ex)
     {
@@ -41,8 +49,11 @@ var hostString = config["host"];
 var userString = config["user"];
 var adminString = config["admin"];
 
+var isClient = false;
+
 if (hostString == null || userString == null)
 {
+    isClient = true;
     var command = string.Join(' ', args.Skip(1));
 
     await SendCommandToPipe(command);
@@ -87,10 +98,9 @@ builder.Services.AddSingleton(defaultConnectionInfo);
 
 var runInMemory = true;
 
-var inTestMode = true;
-
 builder.Services.AddSingleton<ISftpMetadataCacheService>(new InMemorySftpMetadataCacheService(TimeSpan.FromMinutes(10)));
 builder.Services.AddSingleton<ISftpConnectionRegistry, InMemorySftpConnectionRegistry>();
+builder.Services.AddSingleton<IUserService, InMemoryUserService>();
 
 if (runInMemory) {
 
@@ -103,6 +113,8 @@ if (runInMemory) {
 }
 
 var app = builder.Build();
+
+//app.UseMiddleware<BasicAuthMiddleware>();
 
 // Connect and disconnect on demand (stateless)
 SftpClient ConnectSftp(SftpConnectionInfo connection)
@@ -221,14 +233,21 @@ app.MapGet("/file/{*path}", async (string path, ISftpConnectionRegistry sftpConn
 .RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
 
 
-app.MapPost("/webhooks", async (HttpContext context, WebhookSubscription sub, IWebhookService webhookService, IApiKeyService apiKeyService) =>
+app.MapPost("/webhooks", async (
+    HttpContext context, 
+    WebhookSubscription sub, 
+    IWebhookService webhookService, 
+    IApiKeyService apiKeyService,
+    IUserService userService,
+    ISftpConnectionRegistry sftpConnectionRegistry) =>
 {
     var apikey = await apiKeyService.GetKeyAsync(context.Request.Headers.Authorization.ToString());
 
-    if (inTestMode)
-        apikey ??= new();
-    else
+    if(apikey == null && !await userService.CheckForAdminInHeaders(context))
         return Results.Unauthorized();
+
+    if (string.IsNullOrEmpty(sub.SftpId))
+        sub.SftpId = sftpConnectionRegistry.GetAll().FirstOrDefault()?.Id ?? "";
 
     await webhookService.AddAsync(sub, apikey);
 
@@ -236,25 +255,46 @@ app.MapPost("/webhooks", async (HttpContext context, WebhookSubscription sub, IW
     return Results.Created($"/webhooks/{sub.Id}", sub);
 });
 
-app.MapPost("/apikeys", async (ApiKeyRequest request, IApiKeyService apiKeyService) => {
+app.MapGet("/webhooks/{*sftpId}", async (
+    HttpContext context,
+    string? sftpId,
+    IWebhookService webhookService,
+    IApiKeyService apiKeyService,
+    IUserService userService,
+    ISftpConnectionRegistry sftpConnectionRegistry) => {
+
+        var apikey = await apiKeyService.GetKeyAsync(context.Request.Headers.Authorization.ToString());
+
+        if (apikey == null && !await userService.CheckForAdminInHeaders(context))
+            return Results.Unauthorized();
+
+        if(string.IsNullOrEmpty(sftpId))
+            sftpId = sftpConnectionRegistry.GetAll().FirstOrDefault()?.Id;
+
+        var webhooks = await webhookService.GetWebhooksForSftpAsync(sftpId);
+
+        return Results.Ok(webhooks);
+    });
+
+app.MapPost("/admin/apikeys", async (ApiKeyRequest request, IApiKeyService apiKeyService) => {
 
     var apiKey = await apiKeyService.CreateKeyAsync(request.Scopes, request.SftpIds);
     
     return Results.Ok(apiKey);
 });
 
-app.MapGet("/apikeys", async (IApiKeyService apiKeyService) => {
+app.MapGet("/admin/apikeys", async (IApiKeyService apiKeyService) => {
     return Results.Ok(await apiKeyService.GetAllKeysAsync());
 });
 
-app.MapGet("/apikeys/{id}", async (string id, IApiKeyService apiKeyService) => {
+app.MapGet("/admin/apikeys/{id}", async (string id, IApiKeyService apiKeyService) => {
     var key = await apiKeyService.GetKeyAsync(id);
     return key != null
         ? Results.Ok(key)
         : Results.NotFound();
 });
 
-app.MapPut("/apikeys/{id}/scopes", async (string id, ScopeUpdateRequest update, IApiKeyService apiKeyService) => {
+app.MapPut("/admin/apikeys/{id}/scopes", async (string id, ScopeUpdateRequest update, IApiKeyService apiKeyService) => {
 
     var key = await apiKeyService.GetKeyAsync(id);
     
@@ -263,7 +303,7 @@ app.MapPut("/apikeys/{id}/scopes", async (string id, ScopeUpdateRequest update, 
     return Results.Ok(key);
 });
 
-app.MapPost("/apikeys/{id}/revoke", async (string id, IApiKeyService apiKeyService) => {
+app.MapPost("/admin/apikeys/{id}/revoke", async (string id, IApiKeyService apiKeyService) => {
 
     if (!await apiKeyService.ReinstateKeyAsync(id))
         return Results.NotFound();    
@@ -279,11 +319,11 @@ app.MapPost("/apikeys/{id}/revoke", async (string id, IApiKeyService apiKeyServi
 //    return Results.Ok(key);
 //});
 
-app.MapDelete("/apikeys/{id}", async (string id, IApiKeyService apiKeyService) => {
+app.MapDelete("/admin/apikeys/{id}", async (string id, IApiKeyService apiKeyService) => {
     return await apiKeyService.DeleteKeyAsync(id) ? Results.Ok() : Results.NotFound();
 });
 
-app.MapPost("/sftp", (SftpConnectionInfoRequest request, ISftpConnectionRegistry registry) =>
+app.MapPost("/admin/sftp", (SftpConnectionInfoRequest request, ISftpConnectionRegistry registry) =>
 {
     var info = new SftpConnectionInfo {
         Id = request.Id,
@@ -297,7 +337,7 @@ app.MapPost("/sftp", (SftpConnectionInfoRequest request, ISftpConnectionRegistry
     return Results.Ok();
 });
 
-app.MapGet("/sftp", (ISftpConnectionRegistry registry) =>
+app.MapGet("/admin/sftp", (ISftpConnectionRegistry registry) =>
 {
     return Results.Ok(registry.GetAll());
 });
@@ -310,64 +350,14 @@ var pollingService = new SftpPollingService(app.Services);
 //await pollingService.StartAsync(new CancellationToken());
 
 // Start REPL
-var client = new HttpClient();
-Console.WriteLine("SFTP API running at http://localhost:5000");
+//var client = new HttpClient();
+//Console.WriteLine("SFTP API running at http://localhost:5000");
 //Console.WriteLine("Enter commands (e.g., 'get /files') or 'exit' to quit.");
 
-var pipeListener = new PipeCommandListener(CancellationToken.None);
-pipeListener.Start();
-
-
-//while (true) {
-//    Console.Write("> ");
-//    var input = Console.ReadLine();
-//    if (string.IsNullOrWhiteSpace(input))
-//        continue;
-
-//    if (input.Trim().ToLower() == "exit")
-//        break;
-
-//    if (input.StartsWith("post ", StringComparison.OrdinalIgnoreCase)) {
-//        var parts = input.Split(' ', 3);
-//        var url = parts.Length > 1 ? parts[1] : "";
-//        var jsonBody = parts.Length > 2 ? parts[2] : "{}";
-
-//        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-
-//        var response = await client.PostAsync("http://localhost:5000" + url, content);
-//        var result = await response.Content.ReadAsStringAsync();
-
-//        Console.WriteLine($"[{(int)response.StatusCode}] {result}");
-//    }
-
-//    if (input.StartsWith("get ", StringComparison.OrdinalIgnoreCase)) {
-//        var parts = input.Split(' ', 2);
-//        if (parts.Length != 2) {
-//            Console.WriteLine("Invalid command format. Use: get /files");
-//            continue;
-//        }
-
-//        var method = parts[0].ToLower();
-//        var endpoint = parts[1];
-
-//        try {
-//            switch (method) {
-//                case "get":
-//                    var response = await client.GetAsync("http://localhost:5000" + endpoint);
-//                    response.EnsureSuccessStatusCode();
-//                    //var result = await response.Content.ReadFromJsonAsync<List<string>>();
-//                    var result = await response.Content.ReadAsStringAsync();
-//                    Console.WriteLine(string.Join('\n', result ?? ""));
-//                    break;
-//                default:
-//                    Console.WriteLine("Unsupported method.");
-//                    break;
-//            }
-//        } catch (Exception ex) {
-//            Console.WriteLine($"Error: {ex.Message}");
-//        }
-//    }   
-//}
+if (!isClient) {
+    //var pipeListener = new PipeCommandListener(CancellationToken.None);
+    //pipeListener.Start();
+}
 
 await Task.Delay(-1);
 

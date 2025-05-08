@@ -13,11 +13,13 @@ namespace SftpFlux.Server.Polling {
         public Task<WebhookSubscription?> GetAsync(Guid id)
             => Task.FromResult(_subs.FirstOrDefault(s => s.Id == id));
 
-        public Task AddAsync(WebhookSubscription subscription, ApiKey apiKey) {
-            if (!PathSecurity.AreAllRequestedPathsAllowed(subscription.IncludePaths, apiKey.WebhookAllowedPaths))
-                throw new InvalidOperationException("Requested include paths not allowed by API key.");
+        public Task AddAsync(WebhookSubscription subscription, ApiKey? apiKey) {
 
-            subscription.ApiKey = apiKey.Key;
+            if(apiKey != null)
+                if (!PathSecurity.AreAllRequestedPathsAllowed(subscription.IncludePaths, apiKey.WebhookAllowedPaths))
+                    throw new InvalidOperationException("Requested include paths not allowed by API key.");
+
+            subscription.ApiKey = apiKey?.Key ?? "";
 
             _subs.Add(subscription);
 

@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Headers;
+﻿using SftpFlux.Server.User;
+using System.Net.Http.Headers;
 
 namespace SftpFlux.Server.Authorization {
     public class RequireScopedDirectoryFilter : IEndpointFilter {
@@ -15,7 +16,9 @@ namespace SftpFlux.Server.Authorization {
             var httpContext = context.HttpContext;
             var apiKeyService = httpContext.RequestServices.GetRequiredService<IApiKeyService>();
 
-            if (GlobalConfig.IsTestBypassAuth)
+            var userService = httpContext.RequestServices.GetRequiredService<IUserService>();
+
+            if (await userService.CheckForAdminInHeaders(httpContext))
                 return await next(context);
 
             if (!httpContext.Request.Headers.TryGetValue("X-API-Key", out var apiKeyHeader))
