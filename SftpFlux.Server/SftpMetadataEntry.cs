@@ -7,6 +7,7 @@
         public long Size { get; set; }
         public string SftpId { get; set; } = default!;
         public DateTime LastModifiedUtc { get; set; }
+        public string Url { get; set; } = default!;
     }
 
 }

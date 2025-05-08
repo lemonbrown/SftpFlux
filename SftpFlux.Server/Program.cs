@@ -1,11 +1,16 @@
-﻿using Renci.SshNet;
+﻿using Org.BouncyCastle.Asn1.Ocsp;
+using Renci.SshNet;
 using Renci.SshNet.Messages;
 using SftpFlux.Server;
 using SftpFlux.Server.Authorization;
 using SftpFlux.Server.Caching;
 using SftpFlux.Server.Connection;
+using SftpFlux.Server.Jobs;
 using SftpFlux.Server.Pipes;
 using SftpFlux.Server.Polling;
+using SftpFlux.Server.Polling.Webhooks;
+using SftpFlux.Server.Queries;
+using SftpFlux.Server.Queues;
 using SftpFlux.Server.User;
 using System.IO.Pipes;
 using System.Text;
@@ -88,8 +93,6 @@ var defaultConnectionInfo = new SftpConnectionInfo {
     Id = Guid.NewGuid().ToString("N")
 };
 
-GlobalConfig.IsTestBypassAuth = true;
-
 // Start Web API in the background
 var builder = WebApplication.CreateBuilder();
 //builder.Logging.ClearProviders();
@@ -98,9 +101,15 @@ builder.Services.AddSingleton(defaultConnectionInfo);
 
 var runInMemory = true;
 
-builder.Services.AddSingleton<ISftpMetadataCacheService>(new InMemorySftpMetadataCacheService(TimeSpan.FromMinutes(10)));
+builder.Services.AddSingleton<ISftpMetadataCacheService>(new InMemorySftpMetadataCacheService(TimeSpan.FromSeconds(10)));
 builder.Services.AddSingleton<ISftpConnectionRegistry, InMemorySftpConnectionRegistry>();
 builder.Services.AddSingleton<IUserService, InMemoryUserService>();
+builder.Services.AddSingleton<IFileQueryService, FileQueryService>();
+builder.Services.AddSingleton<IScheduledJobRegistry, InMemoryScheduledJobRegistry>();
+builder.Services.AddSingleton<ScheduledJobProcessor, ScheduledJobProcessor>();
+builder.Services.AddSingleton<WebhookNotifier, WebhookNotifier>();
+builder.Services.AddSingleton<IFileQueueService, InMemoryFileQueueService>();
+builder.Services.AddHttpClient();
 
 if (runInMemory) {
 
@@ -134,90 +143,27 @@ SftpClient ConnectSftp(SftpConnectionInfo connection)
 
 app.MapGet("/files/{*path}", async (
     string? path,
-    string? name,
-    string? type,
-    DateTime? modifiedFrom,
-    DateTime? modifiedTo,
-    string? sortBy,
-    string? sortOrder,
-    ISftpConnectionRegistry sftpConnectionRegistry,
-    ISftpMetadataCacheService cacheService,
-    int page = 1,
-    int pageSize = 50) =>
+    HttpRequest request,
+    IFileQueryService fileQueryService) =>
 {
-    path ??= ".";
+ 
+    var query = new FileQuery(
+        NameContains: request.Query["name"],
+        FileType: request.Query["type"],
+        ModifiedFrom: DateTime.TryParse(request.Query["modifiedFrom"], out var mf) ? mf : null,
+        ModifiedTo: DateTime.TryParse(request.Query["modifiedTo"], out var mt) ? mt : null,
+        CreatedFrom: DateTime.TryParse(request.Query["createdFrom"], out var cf) ? cf : null,
+        CreatedTo: DateTime.TryParse(request.Query["createdTo"], out var ct) ? ct : null,
+        SortBy: request.Query["sortBy"],
+        SortOrder: request.Query["sortOrder"],
+        Path: path ?? ".",
+        Page: int.TryParse(request.Query["page"], out var p) ? p : 1,
+        PageSize: int.TryParse(request.Query["pageSize"], out var ps) ? ps : 50);
 
-    var connections = sftpConnectionRegistry.GetAll();
-    if (!connections.Any())
-        return Results.Problem("No SFTP connections available.");
-
-    var connectionId = connections.First().Id;
-    var cached = cacheService.GetDirectoryEntries(path, connectionId);
-
-    List<SftpMetadataEntry> entries;
-    if (cached != null)
-    {
-        entries = cached.ToList();
-    }
-    else
-    {
-        var client = ConnectSftp(connections.First());
-
-        if (!client.Exists(path))
-            return Results.NotFound($"Path not found: {path}");
-
-        entries = client.ListDirectory(path)
-            .Where(f => f.Name != "." && f.Name != "..")
-            .Select(f => new SftpMetadataEntry
-            {
-                Path = path,
-                Name = f.Name,
-                IsDirectory = f.IsDirectory,
-                Size = f.Attributes.Size,
-                LastModifiedUtc = f.Attributes.LastWriteTimeUtc,
-                
-            })
-            .ToList();
-
-        cacheService.SetDirectoryEntries(path, entries, connectionId);
-    }
-
-    // Apply filters
-    var filtered = entries
-        .Where(f => string.IsNullOrEmpty(name) || f.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
-        .Where(f => string.IsNullOrEmpty(type) || f.Name.EndsWith("." + type, StringComparison.OrdinalIgnoreCase))
-        .Where(f => !modifiedFrom.HasValue || f.LastModifiedUtc >= modifiedFrom.Value)
-        .Where(f => !modifiedTo.HasValue || f.LastModifiedUtc <= modifiedTo.Value);
-
-    // Paging
+    var result = await fileQueryService.QueryFilesAsync(query);
 
 
-    // Apply sorting
-    bool descending = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
-
-    filtered = sortBy?.ToLower() switch
-    {
-        "name" => descending ? filtered.OrderByDescending(f => f.Name) : filtered.OrderBy(f => f.Name),
-        "size" => descending ? filtered.OrderByDescending(f => f.Size) : filtered.OrderBy(f => f.Size),
-        "lastmodified" => descending ? filtered.OrderByDescending(f => f.LastModifiedUtc) : filtered.OrderBy(f => f.LastModifiedUtc),
-        _ => filtered.OrderBy(f => f.Name) // Default sort
-    };
-
-    var totalCount = filtered.Count();
-    var results = filtered
-        .Skip((page - 1) * pageSize)
-        .Take(pageSize)
-        .ToList();
-
-    var response = new
-    {
-        Page = page,
-        PageSize = pageSize,
-        TotalCount = totalCount,
-        Results = results
-    };
-
-    return Results.Ok(response);
+    return Results.Ok(result);
 })
 .RequireScopedDirectory("read", ctx => ctx.Arguments[0]?.ToString() ?? "/");
 
@@ -334,6 +280,13 @@ app.MapGet("/webhooks/{*sftpId}", async (
         return Results.Ok(webhooks);
     });
 
+app.MapPost("/jobs", (
+    ScheduledFileJob job,
+    IScheduledJobRegistry registry) => {
+        registry.AddJob(job);
+        return Results.Ok(new { message = "Job scheduled", jobId = job.Id });
+    });
+
 app.MapPost("/admin/apikeys", async (ApiKeyRequest request, IApiKeyService apiKeyService) => {
 
     var apiKey = await apiKeyService.CreateKeyAsync(request.Scopes, request.SftpIds);
@@ -400,21 +353,35 @@ app.MapGet("/admin/sftp", (ISftpConnectionRegistry registry) =>
     return Results.Ok(registry.GetAll());
 });
 
+app.MapPost("/queues/{queueName}/dequeue", async (
+    string queueName,
+    IFileQueueService fileQueueService) => {
+        var item = await fileQueueService.DequeueAsync(queueName);
+
+        return item is not null
+            ? Results.Ok(item)
+            : Results.NoContent();
+    });
+
+app.MapPost("/test", (FileQueryResult queryResult) => {
+    return Results.Ok(queryResult); 
+});
 
 var serverTask = app.RunAsync("http://localhost:5000");
 
 var pollingService = new SftpPollingService(app.Services);
 
-//await pollingService.StartAsync(new CancellationToken());
-
-// Start REPL
-//var client = new HttpClient();
-//Console.WriteLine("SFTP API running at http://localhost:5000");
-//Console.WriteLine("Enter commands (e.g., 'get /files') or 'exit' to quit.");
+await pollingService.StartAsync(new CancellationToken());
 
 if (!isClient) {
+
     //var pipeListener = new PipeCommandListener(CancellationToken.None);
+
     //pipeListener.Start();
+
+    //var jobService = new JobSchedulerService(app.Services);
+
+    //await jobService.StartAsync(new CancellationToken());
 }
 
 await Task.Delay(-1);
@@ -422,9 +389,3 @@ await Task.Delay(-1);
 record ApiKeyRequest(string Name, List<string>? Scopes, List<string>? SftpIds);
 
 record ScopeUpdateRequest(List<string> Scopes);
-
-static class GlobalConfig {
-
-    public static bool IsTestBypassAuth { get; set; }
-
-}

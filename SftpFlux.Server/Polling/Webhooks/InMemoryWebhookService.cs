@@ -1,7 +1,7 @@
 ﻿using SftpFlux.Server.Authorization;
 using SftpFlux.Server.Helpers;
 
-namespace SftpFlux.Server.Polling {
+namespace SftpFlux.Server.Polling.Webhooks {
 
     public class InMemoryWebhookService : IWebhookService {
 
@@ -15,7 +15,7 @@ namespace SftpFlux.Server.Polling {
 
         public Task AddAsync(WebhookSubscription subscription, ApiKey? apiKey) {
 
-            if(apiKey != null)
+            if (apiKey != null)
                 if (!PathSecurity.AreAllRequestedPathsAllowed(subscription.IncludePaths, apiKey.WebhookAllowedPaths))
                     throw new InvalidOperationException("Requested include paths not allowed by API key.");
 

@@ -13,6 +13,7 @@
 
         public InMemorySftpMetadataCacheService(TimeSpan? ttl = null) {
             _ttl = ttl ?? TimeSpan.FromMinutes(5); // Default TTL
+
         }
 
         public IEnumerable<SftpMetadataEntry>? GetDirectoryEntries(string path, string? sftpId) {
